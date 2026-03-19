@@ -17,6 +17,7 @@ import (
 	"charm.land/wish/v2/logging"
 	"github.com/Tr3yWay996/HC_Adventure/game"
 	"github.com/Tr3yWay996/HC_Adventure/player"
+	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/ssh"
 )
 
@@ -68,5 +69,12 @@ func teaHandler(s ssh.Session) (tea.Model, []tea.ProgramOption) {
 	p := player.New(s)
 	m := game.NewModel(p, pty.Window.Width, pty.Window.Height)
 
-	return m, []tea.ProgramOption{}
+	// Force TrueColor for each SSH session.
+	// On Windows, bubbletea auto-detects the color profile from the server
+	// process environment, which doesn't have COLORTERM or similar set,
+	// so it defaults to no-color. We override it here to ensure SSH clients
+	// receive full ANSI colors regardless of the server OS.
+	return m, []tea.ProgramOption{
+		tea.WithColorProfile(colorprofile.TrueColor),
+	}
 }

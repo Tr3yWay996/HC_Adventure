@@ -123,8 +123,12 @@ func (m Model) updateMenu(key string) (tea.Model, tea.Cmd) {
 		switch m.cursor {
 		case 0: // New Game
 			m.state = stateGame
+			m.cursor = 0
+			return m, tea.ClearScreen
 		case 1: // Continue (placeholder)
 			m.state = stateGame
+			m.cursor = 0
+			return m, tea.ClearScreen
 		case 2: // Quit
 			m.quitting = true
 			return m, tea.Quit
@@ -275,7 +279,7 @@ func (m Model) updateGame(key string) (tea.Model, tea.Cmd) {
 	case "q", "escape":
 		m.state = stateMenu
 		m.cursor = 0
-		return m, nil
+		return m, tea.ClearScreen
 	}
 
 	// For the game state, the cursor controls the current choices
@@ -329,6 +333,7 @@ func (m Model) updateGame(key string) (tea.Model, tea.Cmd) {
 				}
 			}
 			m.cursor = 0 // Reset cursor for the next room
+			return m, tea.ClearScreen // Wipe old content before drawing new room
 		}
 	}
 
