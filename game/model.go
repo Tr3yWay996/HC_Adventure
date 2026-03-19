@@ -155,13 +155,15 @@ func (m Model) viewMenu() string {
 	b.WriteString(subtitle)
 	b.WriteString("\n\n")
 
-	// Menu items
+	// Menu items — Width(12) applied here only so choices in viewGame are unaffected
+	menuItemW := MenuItemStyle.Width(12)
+	menuSelectedW := MenuSelectedStyle.Width(12)
 	for i, item := range menuItems {
 		cursor := "  "
-		style := MenuItemStyle
+		style := menuItemW
 		if i == m.cursor {
 			cursor = MenuCursorStyle.Render("▸ ")
-			style = MenuSelectedStyle
+			style = menuSelectedW
 		}
 		b.WriteString(cursor + style.Render(item) + "\n")
 	}
@@ -208,7 +210,7 @@ var chambers = map[string]Room{
 		Choices: []Choice{
 			{Text: "You don't move and observe", NextID: "observe"},
 			{Text: "You get up and try to open the door", NextID: "door"},
-			{Text: "You get up and try to open the chest", NextID: "chest"},
+			{Text: "You get up and try to open the chest", NextID: "first-room-chest"},
 			{Text: "You get up and try to look out the window", NextID: "window"},
 			{Text: "You get up and look under the bed", NextID: "under_bed"},
 		},
@@ -229,38 +231,38 @@ var chambers = map[string]Room{
 			{Text: "Go back", NextID: "start"},
 		},
 	},
-	"chest": {
-		ID:          "chest",
-		Title:       "Solid gold-ornamented chest",
+	"first-room-chest": {
+		ID:          "first-room-chest",
+		Title:       "Heavy gold-ornamented chest",
 		Description: "The chest is locked with a heavy padlock. You need a key.",
 		Choices: []Choice{
-			{Text: "Unlock the chest", NextID: "chest_open", RequiredItem: "Ornate Key"},
+			{Text: "Unlock the chest", NextID: "chest_try", RequiredItem: "Ornated Key"},
 			{Text: "Go back", NextID: "start"},
 		},
 	},
-	"chest_open": {
-		ID:          "chest_open",
-		Title:       "Open Chest",
-		Description: "The ornate key fits perfectly. You turn it and the heavy padlock clicks open! Inside you find a mysterious glowing orb.",
+	"chest_try": {
+		ID:          "chest_try",
+		Title:       "Try to open the chest",
+		Description: "The ornated key feels loose in the lock. You turn it, you can hear the metal of the key ratling inside but the heavy padlock doesn't budge, this is not the right key.",
 		Choices: []Choice{
-			{Text: "Take the orb and go back", NextID: "start", GiveItem: "Glowing Orb"},
-			{Text: "Leave it and go back", NextID: "start"},
+			{Text: "Go back", NextID: "start"},
 		},
 	},
 	"window": {
 		ID:          "window",
 		Title:       "The Window",
-		Description: "You look outside and see nothing but a swirling gray mist. This is not the outside world you remember.",
+		Description: "You try to look out the window, but its opaque finishing prevents you from seeing anything outside.",
 		Choices: []Choice{
+			{Text: "Try to open the window", NextID: "window_try"},
 			{Text: "Go back", NextID: "start"},
 		},
 	},
 	"under_bed": {
 		ID:          "under_bed",
 		Title:       "Under the Bed",
-		Description: "You look under the bed and find a small, ornate key. It doesn't look like it could fit the chest's lock though.",
+		Description: "You look under the bed and find a small, ornated key. Unfortunate that it doesn't look like it could fit the chest's lock though.",
 		Choices: []Choice{
-			{Text: "Take the key and go back", NextID: "take_key", GiveItem: "Ornate Key"},
+			{Text: "Take the key and go back", NextID: "take_key", GiveItem: "Ornated Key"},
 			{Text: "Leave the key and go back", NextID: "start"},
 		},
 	},
@@ -268,6 +270,14 @@ var chambers = map[string]Room{
 		ID:          "take_key",
 		Title:       "Key",
 		Description: "You take the key and put it in your pocket. It feels cold to the touch.",
+		Choices: []Choice{
+			{Text: "Go back", NextID: "start"},
+		},
+	},
+	"window_try": {
+		ID:          "window_try",
+		Title:       "The window",
+		Description: "You try to open the window, you grab the handle and try to twist it. It doesn't budge, the only thing it does is cracking noises from the wood around the window frame. Maybe you could force it open with something ?",
 		Choices: []Choice{
 			{Text: "Go back", NextID: "start"},
 		},
@@ -332,7 +342,7 @@ func (m Model) updateGame(key string) (tea.Model, tea.Cmd) {
 					m.player.Inventory = append(m.player.Inventory, choice.GiveItem)
 				}
 			}
-			m.cursor = 0 // Reset cursor for the next room
+			m.cursor = 0              // Reset cursor for the next room
 			return m, tea.ClearScreen // Wipe old content before drawing new room
 		}
 	}
