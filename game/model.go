@@ -228,6 +228,42 @@ var chambers = map[string]Room{
 		Title:       "Bedroom door, locked from the outside",
 		Description: "You grab the handle, but the door is locked tight.",
 		Choices: []Choice{
+			{Text: "Try to open the door", NextID: "door_try"},
+			{Text: "Go back", NextID: "start"},
+		},
+	},
+	"door_try": {
+		ID:          "door_try",
+		Title:       "Try to open the door",
+		Description: "You try to open the door, but it is locked tight.",
+		Choices: []Choice{
+			{Text: "Try to pull on the handle", NextID: "door_try_pull"},
+			{Text: "Go back", NextID: "start"},
+		},
+	},
+	"door_try_pull": {
+		ID:          "door_try_pull",
+		Title:       "Try to open the door",
+		Description: "You notice light on the other end when pulling hard on the handle. Maybe something will happen if you keep trying ?",
+		Choices: []Choice{
+			{Text: "Pull harder", NextID: "door_try_pull_harder"},
+			{Text: "Go back", NextID: "start"},
+		},
+	},
+	"door_try_pull_harder": {
+		ID:          "door_try_pull_harder",
+		Title:       "Try to open the door",
+		Description: "You pull harder on the handle, you feel the door creaking and the wood around the handle splintering. You can almost open it.",
+		Choices: []Choice{
+			{Text: "Pull harder", NextID: "door_try_pull_harder_harder"},
+			{Text: "Go back", NextID: "start"},
+		},
+	},
+	"door_try_pull_harder_harder": {
+		ID:          "door_try_pull_harder_harder",
+		Title:       "Try to open the door",
+		Description: "You pull even harder on the handle, you feel the door creaking and the wood around the handle splintering.",
+		Choices: []Choice{
 			{Text: "Go back", NextID: "start"},
 		},
 	},
@@ -257,6 +293,14 @@ var chambers = map[string]Room{
 			{Text: "Go back", NextID: "start"},
 		},
 	},
+	"window_try": {
+		ID:          "window_try",
+		Title:       "The window",
+		Description: "You try to open the window, you grab the handle and try to twist it. It doesn't budge, the only thing it does is cracking noises from the wood around the window frame. Maybe you could force it open with something ?",
+		Choices: []Choice{
+			{Text: "Go back", NextID: "start"},
+		},
+	},
 	"under_bed": {
 		ID:          "under_bed",
 		Title:       "Under the Bed",
@@ -270,14 +314,6 @@ var chambers = map[string]Room{
 		ID:          "take_key",
 		Title:       "Key",
 		Description: "You take the key and put it in your pocket. It feels cold to the touch.",
-		Choices: []Choice{
-			{Text: "Go back", NextID: "start"},
-		},
-	},
-	"window_try": {
-		ID:          "window_try",
-		Title:       "The window",
-		Description: "You try to open the window, you grab the handle and try to twist it. It doesn't budge, the only thing it does is cracking noises from the wood around the window frame. Maybe you could force it open with something ?",
 		Choices: []Choice{
 			{Text: "Go back", NextID: "start"},
 		},
