@@ -369,7 +369,7 @@ var chambers = map[string]Room{
 		Description: "The old book worn by time you managed to get out of the golden chest in one piece",
 		Choices: []Choice{
 			{Text: "Read the old book"},
-			{Text: "Go back", NextID: "start"},
+			{Text: "Don't read the old book", NextID: "start"},
 		},
 	},
 
