@@ -27,6 +27,7 @@ const (
 )
 
 func main() {
+	log.SetLevel(log.DebugLevel)
 	s, err := wish.NewServer(
 		wish.WithAddress(net.JoinHostPort(host, port)),
 		wish.WithHostKeyPath(".ssh/id_ed25519"),

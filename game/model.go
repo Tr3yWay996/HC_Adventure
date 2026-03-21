@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"charm.land/log/v2"
 	"github.com/Tr3yWay996/HC_Adventure/player"
 )
 
@@ -122,19 +123,27 @@ func (m Model) updateMenu(key string) (tea.Model, tea.Cmd) {
 	case "enter":
 		switch m.cursor {
 		case 0: // New Game
+			// Reset player state for a fresh start
+			m.player.Progress = make(map[string]any)
+			m.player.Inventory = make([]string, 0)
+			m.player.GameVariables = make([]string, 0)
 			m.state = stateGame
 			m.cursor = 0
+			log.Info("Player started a new game", "player", m.player.Name, "session", m.player.SessionID[:8])
 			return m, tea.ClearScreen
 		case 1: // Continue (placeholder)
 			m.state = stateGame
 			m.cursor = 0
+			log.Info("Player continued game", "player", m.player.Name, "session", m.player.SessionID[:8])
 			return m, tea.ClearScreen
 		case 2: // Quit
 			m.quitting = true
+			log.Info("Player quit from menu", "player", m.player.Name, "session", m.player.SessionID[:8])
 			return m, tea.Quit
 		}
 	case "q":
 		m.quitting = true
+		log.Info("Player quit via 'q'", "player", m.player.Name, "session", m.player.SessionID[:8])
 		return m, tea.Quit
 	}
 	return m, nil
@@ -183,10 +192,17 @@ func (m Model) viewMenu() string {
 // ── Game ───────────────────────────────────────────────────────────────
 
 type Choice struct {
-	Text         string
-	NextID       string
-	GiveItem     string
-	RequiredItem string
+	Text          string
+	NextID        string
+	GiveItem      string
+	RequiredItem  string
+	GameVariable  string
+	IfVariable    string
+	IfNotVariable string
+	AddCounter    string // Name of the counter to increment
+	ReqCounter    string // Name of the counter to check
+	ReqCountMin   int    // Choice appears if counter is >= this value
+	ReqCountMax   int    // Choice appears if counter is <= this value (0 ignores the max limit)
 }
 
 type Room struct {
@@ -196,33 +212,53 @@ type Room struct {
 	Choices     []Choice
 }
 
-// Hardcoded chambers for now
 var chambers = map[string]Room{
 	"start": {
 		ID:    "start",
 		Title: "The beginning",
 		Description: "You find yourself in a dimly lit bedroom.\n\n" +
-			"You are curently sitting on a bed, you can see a door to your upper right, a chest with a lock close to the left wall where your bed is and a window to your right." +
+			"You are currently sitting on a bed, you can see a door to your upper right, a chest with a lock close to the left wall where your bed is and a window to your right." +
 			"\n\n" +
 			"You start to recognize where you are, it is your first childhood bedroom.\n" +
 			"There is this weird, lingering feeling, that something is off about it.\n\n" +
-			"It is as if the room you always knew in your childhood had suddenly changed and became noticibly unfamiliar to you.\n",
+			"It is as if the room you always knew in your childhood had suddenly changed and became noticeably unfamiliar to you.\n",
 		Choices: []Choice{
 			{Text: "You don't move and observe", NextID: "observe"},
-			{Text: "You get up and try to open the door", NextID: "door"},
+			{Text: "You get up and try to open the door", NextID: "door", IfNotVariable: "door_broken"},
+			{Text: "You get up and look at the broken door", NextID: "door_broken", IfVariable: "door_broken"},
 			{Text: "You get up and try to open the chest", NextID: "first-room-chest"},
 			{Text: "You get up and try to look out the window", NextID: "window"},
 			{Text: "You get up and look under the bed", NextID: "under_bed"},
 		},
 	},
+
+	// Observing dialog
 	"observe": {
 		ID:          "observe",
-		Title:       "Observation",
-		Description: "You look around but nothing changes.",
+		Title:       "You decided to sit and observe around",
+		Description: "You sit on your bed and look around. Nothing happen.",
 		Choices: []Choice{
-			{Text: "Go back", NextID: "start"},
+			{Text: "Try harder", NextID: "observing_longer"},
 		},
 	},
+	"observing_longer": {
+		ID:          "observing",
+		Title:       "You're still observing around.",
+		Description: "Half an hour ago you decided to stay on the bed for longer, staring at the walls of the room aimlessly, zoning out, doing nothing productive as the time passes",
+		Choices: []Choice{
+			{Text: "Lay down", NextID: "observing_troll_loop"},
+		},
+	},
+	"observing_troll_loop": {
+		ID:          "observing_troll_loop",
+		Title:       "Laying down",
+		Description: "You decide to lay down on the bed and stare at the ceiling instead, slowly drifting to sleep",
+		Choices: []Choice{
+			{Text: "Relax", NextID: "observing_troll_loop", AddCounter: "relax_count", ReqCounter: "relax_count", ReqCountMax: 2},
+			{Text: "Snap out of it and get up", NextID: "start", ReqCounter: "relax_count", ReqCountMin: 3},
+		},
+	},
+	// Bedroom door dialog
 	"door": {
 		ID:          "door",
 		Title:       "Bedroom door, locked from the outside",
@@ -234,7 +270,7 @@ var chambers = map[string]Room{
 	},
 	"door_try": {
 		ID:          "door_try",
-		Title:       "Try to open the door",
+		Title:       "Bedroom door",
 		Description: "You try to open the door, but it is locked tight.",
 		Choices: []Choice{
 			{Text: "Try to pull on the handle", NextID: "door_try_pull"},
@@ -243,7 +279,7 @@ var chambers = map[string]Room{
 	},
 	"door_try_pull": {
 		ID:          "door_try_pull",
-		Title:       "Try to open the door",
+		Title:       "Bedroom door",
 		Description: "You notice light on the other end when pulling hard on the handle. Maybe something will happen if you keep trying ?",
 		Choices: []Choice{
 			{Text: "Pull harder", NextID: "door_try_pull_harder"},
@@ -252,38 +288,92 @@ var chambers = map[string]Room{
 	},
 	"door_try_pull_harder": {
 		ID:          "door_try_pull_harder",
-		Title:       "Try to open the door",
+		Title:       "Bedroom door",
 		Description: "You pull harder on the handle, you feel the door creaking and the wood around the handle splintering. You can almost open it.",
 		Choices: []Choice{
-			{Text: "Pull harder", NextID: "door_try_pull_harder_harder"},
+			{Text: "Pull even harder", NextID: "door_try_pull_harder_harder"},
 			{Text: "Go back", NextID: "start"},
 		},
 	},
 	"door_try_pull_harder_harder": {
 		ID:          "door_try_pull_harder_harder",
-		Title:       "Try to open the door",
-		Description: "You pull even harder on the handle, you feel the door creaking and the wood around the handle splintering.",
+		Title:       "Bedroom door",
+		Description: "You pull even harder on the handle, you hear the wood of the door cracking.",
 		Choices: []Choice{
+			{Text: "Pull with both hands with all your strength", NextID: "door_broken"},
 			{Text: "Go back", NextID: "start"},
 		},
 	},
+	"door_broken": {
+		ID:          "door_broken",
+		Title:       "Bedroom door",
+		Description: "You look at what remains of the door handle, what once was your only way of getting out of this corrupted room, now ruined by your own brutality..\n\n What a mess",
+		Choices: []Choice{
+			{Text: "Go back", NextID: "start", GameVariable: "door_broken"},
+		},
+	},
+
+	// Chest dialog
 	"first-room-chest": {
 		ID:          "first-room-chest",
 		Title:       "Heavy gold-ornamented chest",
 		Description: "The chest is locked with a heavy padlock. You need a key.",
 		Choices: []Choice{
-			{Text: "Unlock the chest", NextID: "chest_try", RequiredItem: "Ornated Key"},
+			{Text: "Unlock the chest", NextID: "chest_try", RequiredItem: "Ornate Key"},
 			{Text: "Go back", NextID: "start"},
 		},
 	},
 	"chest_try": {
 		ID:          "chest_try",
 		Title:       "Try to open the chest",
-		Description: "The ornated key feels loose in the lock. You turn it, you can hear the metal of the key ratling inside but the heavy padlock doesn't budge, this is not the right key.",
+		Description: "The ornate key feels loose in the lock. You turn it, you can hear the metal of the key rattling inside but the heavy padlock doesn't budge, this is not the right key.",
 		Choices: []Choice{
 			{Text: "Go back", NextID: "start"},
 		},
 	},
+	"chest_open": {
+		ID:          "chest_open",
+		Title:       "The bedroom chest",
+		Description: "You put the golden key inside and turn it. The heavy padlock opens with a satisfying *click*. \n\nYou open the chest and you find an old book with a wax sealed letter with the letters H.C written with a quill in red",
+		Choices: []Choice{
+			{Text: "Take the old book", NextID: "take_old_book", GiveItem: "Old book"},
+			{Text: "Take the wax sealed letter", NextID: "take_wax_sealed_letter", GiveItem: "Wax sealed letter"},
+			{Text: "Leave the key and go back", NextID: "start"},
+		},
+	},
+
+	// Chest items dialogs
+	"old_book": {
+		ID:          "old_book",
+		Title:       "An old book",
+		Description: "The old book you found in the gold chest earlier, who know what it may contain",
+		Choices: []Choice{
+			{Text: "Read the book", NextID: "read_book"},
+			{Text: "Go back", NextID: "start"},
+		},
+	},
+	"sealed_letter": {
+		ID:          "sealed_letter",
+		Title:       "A wax sealed letter",
+		Description: "The letter that you found earlier in the golden chest, you can see a wax seal with the letters H.C written in red by a quill on the face of it",
+		Choices: []Choice{
+			{Text: "Read the letter", NextID: "read_letter"},
+			{Text: "Go back", NextID: "start"},
+		},
+	},
+
+	// Reading the book dialogs
+	"read_book": {
+		ID:          "read_book",
+		Title:       "The book",
+		Description: "The old book worn by time you managed to get out of the golden chest in one piece",
+		Choices: []Choice{
+			{Text: "Read the old book"},
+			{Text: "Go back", NextID: "start"},
+		},
+	},
+
+	// Window dialog
 	"window": {
 		ID:          "window",
 		Title:       "The Window",
@@ -304,9 +394,9 @@ var chambers = map[string]Room{
 	"under_bed": {
 		ID:          "under_bed",
 		Title:       "Under the Bed",
-		Description: "You look under the bed and find a small, ornated key. Unfortunate that it doesn't look like it could fit the chest's lock though.",
+		Description: "You look under the bed and find a small, ornate key. Unfortunate that it doesn't look like it could fit the chest's lock though.",
 		Choices: []Choice{
-			{Text: "Take the key and go back", NextID: "take_key", GiveItem: "Ornated Key"},
+			{Text: "Take the key and go back", NextID: "take_key", GiveItem: "Ornate Key"},
 			{Text: "Leave the key and go back", NextID: "start"},
 		},
 	},
@@ -318,6 +408,42 @@ var chambers = map[string]Room{
 			{Text: "Go back", NextID: "start"},
 		},
 	},
+}
+
+func (m Model) hasVariable(variable string) bool {
+	for _, v := range m.player.GameVariables {
+		if v == variable {
+			return true
+		}
+	}
+	return false
+}
+
+func (m Model) getActiveChoices(room Room) []Choice {
+	var active []Choice
+	for _, c := range room.Choices {
+		if c.IfVariable != "" && !m.hasVariable(c.IfVariable) {
+			continue
+		}
+		if c.IfNotVariable != "" && m.hasVariable(c.IfNotVariable) {
+			continue
+		}
+
+		if c.ReqCounter != "" {
+			count := 0
+			if val, ok := m.player.Progress[c.ReqCounter].(int); ok {
+				count = val
+			}
+			if c.ReqCountMin > 0 && count < c.ReqCountMin {
+				continue
+			}
+			if c.ReqCountMax > 0 && count > c.ReqCountMax {
+				continue
+			}
+		}
+		active = append(active, c)
+	}
+	return active
 }
 
 func (m Model) updateGame(key string) (tea.Model, tea.Cmd) {
@@ -336,18 +462,20 @@ func (m Model) updateGame(key string) (tea.Model, tea.Cmd) {
 	}
 	room := chambers[currentRoomID]
 
+	activeChoices := m.getActiveChoices(room)
+
 	switch key {
 	case "up", "k":
 		if m.cursor > 0 {
 			m.cursor--
 		}
 	case "down", "j":
-		if m.cursor < len(room.Choices)-1 {
+		if m.cursor < len(activeChoices)-1 {
 			m.cursor++
 		}
 	case "enter":
-		if m.cursor >= 0 && m.cursor < len(room.Choices) {
-			choice := room.Choices[m.cursor]
+		if m.cursor >= 0 && m.cursor < len(activeChoices) {
+			choice := activeChoices[m.cursor]
 
 			// Check for required item
 			if choice.RequiredItem != "" {
@@ -363,6 +491,7 @@ func (m Model) updateGame(key string) (tea.Model, tea.Cmd) {
 				}
 			}
 
+			log.Debug("Player actions/info debug:", "player", m.player.Name, "session", m.player.SessionID[:8], "room", currentRoomID, "choice", choice.Text, "next_room", choice.NextID)
 			m.player.Progress["current_room"] = choice.NextID
 
 			// Handle item pickup
@@ -378,8 +507,24 @@ func (m Model) updateGame(key string) (tea.Model, tea.Cmd) {
 					m.player.Inventory = append(m.player.Inventory, choice.GiveItem)
 				}
 			}
+			// handle game variables
+			if choice.GameVariable != "" {
+				if !m.hasVariable(choice.GameVariable) {
+					m.player.GameVariables = append(m.player.GameVariables, choice.GameVariable)
+				}
+			}
+
+			// handle counters
+			if choice.AddCounter != "" {
+				count := 0
+				if val, ok := m.player.Progress[choice.AddCounter].(int); ok {
+					count = val
+				}
+				m.player.Progress[choice.AddCounter] = count + 1
+			}
+
 			m.cursor = 0              // Reset cursor for the next room
-			return m, tea.ClearScreen // Wipe old content before drawing new room
+			return m, tea.ClearScreen // Wipe old content before drawing new dialog box
 		}
 	}
 
@@ -389,21 +534,43 @@ func (m Model) updateGame(key string) (tea.Model, tea.Cmd) {
 func (m Model) viewGame() string {
 	var b strings.Builder
 
-	// Player info bar
-	invStr := strings.Join(m.player.Inventory, ", ")
-	if invStr == "" {
-		invStr = "Empty"
-	}
-	info := PlayerInfoStyle.Render(fmt.Sprintf("⚔ %s  │  Session: %s  │  Inventory: %s", m.player.Name, m.player.SessionID[:8], invStr))
-	b.WriteString(info)
-	b.WriteString("\n\n")
-
-	// Get current room
+	// Get current room early to find active loop counters
 	currentRoomID, _ := m.player.Progress["current_room"].(string)
 	if currentRoomID == "" {
 		currentRoomID = "start"
 	}
 	room := chambers[currentRoomID]
+
+	// Find relevant loop counters for this room
+	var loopCounters []string
+	seenCounters := make(map[string]bool)
+	for _, c := range room.Choices {
+		counterName := c.ReqCounter
+		if counterName == "" {
+			counterName = c.AddCounter
+		}
+		if counterName != "" && !seenCounters[counterName] {
+			count := 0
+			if val, ok := m.player.Progress[counterName].(int); ok {
+				count = val
+			}
+			loopCounters = append(loopCounters, fmt.Sprintf("%s: %d", counterName, count))
+			seenCounters[counterName] = true
+		}
+	}
+	loopStr := "-"
+	if len(loopCounters) > 0 {
+		loopStr = strings.Join(loopCounters, ", ")
+	}
+
+	// Player info bar
+	invStr := strings.Join(m.player.Inventory, ", ")
+	if invStr == "" {
+		invStr = "Empty"
+	}
+	info := PlayerInfoStyle.Render(fmt.Sprintf("⚔ %s  │  Session: %s  │  Inventory: %s  │  Active variables: %v  │  Loop counters: %s", m.player.Name, m.player.SessionID[:8], invStr, m.player.GameVariables, loopStr))
+	b.WriteString(info)
+	b.WriteString("\n\n")
 
 	roomTitle := RoomTitleStyle.Render(room.Title)
 	roomDesc := RoomDescStyle.Render(room.Description)
@@ -418,7 +585,9 @@ func (m Model) viewGame() string {
 	choicesStr.WriteString(PromptStyle.Render("What do you do?"))
 	choicesStr.WriteString("\n\n")
 
-	for i, choice := range room.Choices {
+	activeChoices := m.getActiveChoices(room)
+
+	for i, choice := range activeChoices {
 		cursor := "  "
 		style := MenuItemStyle
 		if i == m.cursor {
@@ -447,7 +616,7 @@ func (m Model) viewGame() string {
 	}
 
 	choicesStr.WriteString("\n")
-	choicesStr.WriteString(HelpStyle.Render("↑/↓ navigate • enter select • esc/q back to menu"))
+	choicesStr.WriteString(HelpStyle.Render("↑/↓ j/k navigate • enter select • q back to menu"))
 
 	// Create a left-aligned container for the choices
 	choicesAligned := lipgloss.NewStyle().Align(lipgloss.Left).Render(choicesStr.String())

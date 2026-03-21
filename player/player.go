@@ -9,11 +9,12 @@ import (
 // Player holds per-session data for a connected player.
 // Extend this struct to persist progress, inventory, stats, etc.
 type Player struct {
-	Name        string
-	SessionID   string
-	ConnectedAt time.Time
-	Progress    map[string]any
-	Inventory   []string
+	Name          string
+	SessionID     string
+	ConnectedAt   time.Time
+	Progress      map[string]any
+	Inventory     []string
+	GameVariables []string
 }
 
 // New creates a Player from the incoming SSH session.
@@ -23,10 +24,11 @@ func New(s ssh.Session) *Player {
 		name = "adventurer"
 	}
 	return &Player{
-		Name:        name,
-		SessionID:   s.Context().SessionID(),
-		ConnectedAt: time.Now(),
-		Progress:    make(map[string]any),
-		Inventory:   make([]string, 0),
+		Name:          name,
+		SessionID:     s.Context().SessionID(),
+		ConnectedAt:   time.Now(),
+		Progress:      make(map[string]any),
+		Inventory:     make([]string, 0),
+		GameVariables: make([]string, 0),
 	}
 }
